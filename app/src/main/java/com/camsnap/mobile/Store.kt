@@ -23,7 +23,7 @@ object Store {
         .put("blank_threshold", 0.93)
         .put("frozen_threshold", 0.5)
         .put("copy_to_gallery", true)
-        .put("sheet_url", "")
+        .put("sheet_url", "https://docs.google.com/spreadsheets/d/1my-1-KbAmUkgAtAR5hlMnt2dVVsF4Rf9J7zOcUZwbhw/edit")
         .put("sheet_refresh_minutes", 10)
         .put("cameras", JSONArray())
 
@@ -43,6 +43,7 @@ object Store {
             val k = it.next()
             if (!s.has(k)) s.put(k, DEFAULTS.get(k))
         }
+        if (s.optString("sheet_url").isBlank()) s.put("sheet_url", DEFAULTS.get("sheet_url"))
         s
     }
 

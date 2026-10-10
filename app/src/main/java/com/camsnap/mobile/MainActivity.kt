@@ -23,6 +23,7 @@ import java.io.File
 class MainActivity : Activity() {
 
     private lateinit var web: WebView
+    private lateinit var bridge: Bridge
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,13 +42,19 @@ class MainActivity : Activity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 loader.shouldInterceptRequest(request.url)
         }
-        web.addJavascriptInterface(Bridge(applicationContext, this), "Android")
+        bridge = Bridge(applicationContext, this)
+        web.addJavascriptInterface(bridge, "Android")
         web.loadUrl("https://appassets.androidplatform.net/assets/index.html")
     }
 
     override fun onResume() {
         super.onResume()
         if (::web.isInitialized) web.evaluateJavascript("window.onAppResume && onAppResume()", null)
+        if (::bridge.isInitialized) bridge.refreshIfStale()
+    }
+
+    fun reloadPumping() = runOnUiThread {
+        if (::web.isInitialized) web.evaluateJavascript("window.reloadPump && reloadPump()", null)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -94,7 +101,7 @@ class Bridge(private val ctx: Context, private val act: MainActivity) {
             }
         }
         Store.saveSettings(ctx, patch)
-        SnapService.instance?.refreshSheetNow()
+        if (patch.has("sheet_url")) refreshSheet()
         "ok"
     } catch (e: Exception) { "error: ${e.message}" }
 
@@ -146,9 +153,28 @@ class Bridge(private val ctx: Context, private val act: MainActivity) {
         return "ok"
     }
 
+    /** Downloads the pumping sheet now (works even when the snapshot service is off). */
+    @Volatile private var downloading = false
+
     @JavascriptInterface fun refreshSheet(): String {
-        val svc = SnapService.instance ?: return "Turn on CamSnap in Accessibility settings first."
-        svc.refreshSheetNow()
+        val s = Store.settings(ctx)
+        val url = s.optString("sheet_url")
+        if (url.isBlank()) return "Add the Google Sheet link in Setup first."
+        if (downloading) return "ok"
+        downloading = true
+        Thread {
+            try { Pumping.refresh(ctx, url, s) } catch (t: Throwable) {} finally { downloading = false }
+            act.reloadPumping()
+        }.start()
         return "ok"
+    }
+
+    @JavascriptInterface fun isDownloading(): Boolean = downloading
+
+    fun refreshIfStale() {
+        val s = Store.settings(ctx)
+        val f = Store.pumpingFile(ctx)
+        val maxAge = s.optDouble("sheet_refresh_minutes", 10.0) * 60_000
+        if (!f.exists() || System.currentTimeMillis() - f.lastModified() > maxAge) refreshSheet()
     }
 }
