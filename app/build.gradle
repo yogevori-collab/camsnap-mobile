@@ -11,11 +11,22 @@ android {
         applicationId 'com.camsnap.mobile'
         minSdk 30          // Android 11+ (needed for accessibility screenshots)
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        // a higher number on every GitHub build, so phones accept it as an update
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger())
+        versionName "1.${System.getenv('GITHUB_RUN_NUMBER') ?: '0'}"
+    }
+    // one fixed signing key in the repository, so every build can update the installed app
+    signingConfigs {
+        camsnap {
+            storeFile file('camsnap.keystore')
+            storePassword 'camsnap123'
+            keyAlias 'camsnap'
+            keyPassword 'camsnap123'
+        }
     }
     buildTypes {
-        release { minifyEnabled false }
+        debug { signingConfig signingConfigs.camsnap }
+        release { minifyEnabled false; signingConfig signingConfigs.camsnap }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
