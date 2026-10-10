@@ -168,6 +168,7 @@ details.ptable table{margin-top:8px}
   <section class="pump" id="pump">
     <div class="pump-head"><h2>Fluid pumping – total volume by fluid</h2></div>
     <div class="sub" id="p-sub">Loading pumping data…</div>
+    <button class="btn" id="p-now" onclick="var r=Android.refreshSheet(); if(r!=='ok') alert(r); else { document.getElementById('p-sub').textContent='Downloading the Google Sheet…'; }">Download now</button>
     <div class="banner" id="p-banner"></div>
     <div class="toolbar" id="p-sites"></div>
     <div class="toolbar" id="p-locs">
@@ -459,7 +460,7 @@ details.ptable table{margin-top:8px}
 
   function render(){
     var sub=$('p-sub'), ban=$('p-banner');
-    if(!P){ sub.textContent='No pumping data yet - add the Google Sheet link in Setup; it is downloaded within a minute.';
+    if(!P){ sub.textContent=Android.isDownloading()?'Downloading the Google Sheet…':'No pumping data yet - press Download now (the sheet link is in Setup).';
             ban.classList.remove('show'); $('p-svg').innerHTML=''; return; }
     sub.textContent='From Google Sheet · last downloaded '+(P.fetched_at?fmtT(new Date(P.fetched_at)):'never')+
       ' · refreshes every '+(P.refresh_minutes||10)+' min';
