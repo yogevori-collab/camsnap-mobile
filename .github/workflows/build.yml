@@ -1,4 +1,3 @@
-yaml
 name: Build CamSnap APK
 on:
   push:
