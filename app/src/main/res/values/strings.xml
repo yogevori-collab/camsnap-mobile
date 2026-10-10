@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CamSnap</string>
+    <string name="service_label">CamSnap camera snapshots</string>
+    <string name="service_desc">Lets CamSnap open Provision CAM2 on schedule and save a snapshot of each camera you marked. It only takes screenshots while CAM2 is on screen and does not read any other app.</string>
+</resources>

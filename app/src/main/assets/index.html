@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CamSnap</title>
+<style>
+:root{
+  --bg:#f5f5f3; --panel:#ffffff; --fg:#1d1d1b; --muted:#6b6b66; --line:#e3e2dd;
+  --ok:#1f8a4c; --ok-bg:#e3f4ea; --bad:#c23a2b; --bad-bg:#fbe7e4; --warn:#a86a00; --warn-bg:#fdf1d8;
+  --idle:#6b6b66; --idle-bg:#eceae5; --accent:#2b5fd9; --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141413; --panel:#1f1f1d; --fg:#ecebe6; --muted:#9c9b95; --line:#33332f;
+  --ok:#4cc27e; --ok-bg:#16301f; --bad:#f07563; --bad-bg:#3a1c17; --warn:#e3a43a; --warn-bg:#36290f;
+  --idle:#9c9b95; --idle-bg:#2a2a27; --accent:#7ea2ff; --shadow:none;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,"Segoe UI",Arial,sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:20px 16px 40px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 24px;justify-content:space-between;margin-bottom:16px}
+h1{font-size:22px;margin:0;font-weight:650;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+.kpis{display:flex;gap:10px;flex-wrap:wrap}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 14px;min-width:92px}
+.kpi b{display:block;font-size:22px;font-weight:650;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--muted);font-size:12px}
+.kpi.ok b{color:var(--ok)} .kpi.bad b{color:var(--bad)}
+.banner{display:none;background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn);border-radius:10px;padding:10px 14px;margin-bottom:14px}
+.banner.show{display:block}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.chip{border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:999px;padding:6px 12px;cursor:pointer;font:inherit}
+.chip.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+input[type=search]{flex:1;min-width:160px;max-width:320px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:8px;padding:7px 10px;font:inherit}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;display:flex;flex-direction:column;transition:transform .12s}
+.card:hover{transform:translateY(-2px)}
+.card.offline{border-color:var(--bad)}
+.media{position:relative;aspect-ratio:16/9;background:#0e0e0d;display:flex;align-items:center;justify-content:center;color:#888}
+.media{overflow:hidden;min-height:0}
+.media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.card.offline .media img{filter:grayscale(.7) brightness(.8)}
+.stamp{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;padding:3px 8px;border-radius:6px}
+.count{position:absolute;right:8px;top:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:2px 7px;border-radius:6px}
+.body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px}
+.title{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.name{font-weight:620;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.pill.ok{color:var(--ok);background:var(--ok-bg)} .pill.offline{color:var(--bad);background:var(--bad-bg)}
+.pill.pending{color:var(--warn);background:var(--warn-bg)} .pill.paused{color:var(--idle);background:var(--idle-bg)}
+.rows{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
+.rows dt{color:var(--muted)} .rows dd{margin:0;font-variant-numeric:tabular-nums}
+.err{font-size:12px;color:var(--bad);word-break:break-word}
+h2{font-size:15px;margin:28px 0 10px;font-weight:620}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+th,td{text-align:left;padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:550;font-size:12px}
+tr:last-child td{border-bottom:none}
+.k-ok{color:var(--ok)} .k-offline{color:var(--bad)} .k-recovered{color:var(--accent)}
+.empty{color:var(--muted);padding:30px;text-align:center;border:1px dashed var(--line);border-radius:12px}
+/* viewer */
+.viewer{position:fixed;inset:0;background:rgba(10,10,10,.96);display:none;flex-direction:column;z-index:10}
+.viewer.show{display:flex}
+.vtop{display:flex;align-items:center;gap:12px;padding:12px 16px;color:#fff}
+.vtop .vname{font-weight:620;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vbtn{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit;text-decoration:none}
+.vbtn:hover{background:rgba(255,255,255,.22)}
+.vmain{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative;padding:0 56px}
+.vmain img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
+.nav{position:absolute;top:50%;transform:translateY(-50%);font-size:26px;width:42px;height:42px;padding:0}
+.nav.prev{left:8px} .nav.next{right:8px}
+.strip{display:flex;gap:6px;overflow-x:auto;padding:10px 16px 16px}
+.strip button{flex:0 0 auto;border:2px solid transparent;border-radius:6px;padding:0;background:none;cursor:pointer;position:relative}
+.strip button.on{border-color:#fff}
+.strip img{width:120px;height:68px;object-fit:cover;border-radius:4px;display:block}
+.strip span{position:absolute;left:3px;bottom:3px;font-size:10px;background:rgba(0,0,0,.65);color:#fff;padding:1px 4px;border-radius:3px}
+@media (max-width:600px){.vmain{padding:0 8px}.nav{display:none}.grid{grid-template-columns:1fr}}
+/* pumping */
+.pump{margin-top:30px}
+.pump-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px}
+.pump-head h2{margin:0}
+.pump .sub{margin:2px 0 12px}
+.pump .toolbar{margin-bottom:12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.tile .lab{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
+.tile .val{font-size:24px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:2px}
+.tile .val small{font-size:13px;font-weight:500;color:var(--muted);margin-left:3px}
+.sw{width:12px;height:3px;border-radius:2px;display:inline-block;flex:none}
+.chartbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 12px 6px;position:relative}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;margin:0 0 6px 4px}
+.legend span{display:flex;align-items:center;gap:7px}
+.chartbox svg{display:block;width:100%;overflow:visible}
+.chartbox .ax text{fill:var(--muted);font-size:11px}
+.chartbox .grid line{stroke:var(--line)}
+.ptip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.15);display:none;min-width:150px;z-index:2}
+.ptip b{display:block;margin-bottom:4px}
+.ptip .r{display:flex;align-items:center;gap:7px;justify-content:space-between}
+.ptip .r span:first-child{display:flex;align-items:center;gap:6px;color:var(--muted)}
+details.ptable{margin-top:10px}
+details.ptable summary{cursor:pointer;color:var(--muted);font-size:13px}
+details.ptable table{margin-top:8px}
+.pempty{color:var(--muted);padding:40px 10px;text-align:center}
+/* mobile app */
+.tabs{position:sticky;top:0;z-index:5;display:flex;gap:4px;background:var(--bg);padding:8px 0 10px;margin:-8px 0 8px;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:10px;padding:10px 6px;font:inherit;font-weight:600}
+.tabs button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tab{display:none}.tab.on{display:block}
+.card2{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.card2 h3{margin:0 0 8px;font-size:15px}
+.hint{color:var(--muted);font-size:13px;margin:6px 0 4px}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:8px;padding:9px 12px;font:inherit;margin:3px 4px 3px 0;cursor:pointer}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.wide{width:100%;padding:12px}
+.btn.del{color:var(--bad)}
+.card2 label{display:block;font-size:13px;color:var(--muted);margin:8px 0}
+.card2 input[type=url],.card2 input[type=number],.card2 select,.camrow input[type=number]{display:block;width:100%;margin-top:4px;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+.card2 label.chk{display:flex;gap:8px;align-items:center;color:var(--fg)}
+.svc{font-weight:600}.svc.on{color:var(--ok)}.svc.off{color:var(--bad)}
+.camrow{display:grid;grid-template-columns:1fr 90px auto auto;gap:8px;align-items:center;border-top:1px solid var(--line);padding:8px 0}
+.camrow .n{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.camrow input[type=number]{margin:0;padding:6px}
+#s-msg{color:var(--ok);font-size:13px}
+.calib{position:fixed;inset:0;background:#000;z-index:20;display:none;flex-direction:column}
+.calib.show{display:flex}
+.cbar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:8px;background:#111;color:#ddd;font-size:12px}
+.cbar span{flex:1 1 100%;margin-bottom:2px}
+.cwrap{flex:1;overflow:auto}
+.cin{position:relative}
+.cwrap img{display:block;width:100%;height:auto;user-select:none;-webkit-user-select:none}
+.cwrap svg{position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="tabs"><button id="tb-cams" onclick="showTab('cams')">Cameras</button><button id="tb-pump" onclick="showTab('pump')">Pumping</button><button id="tb-setup" onclick="showTab('setup')">Setup</button></nav>
+  <section class="tab" id="tab-cams">
+  <header>
+    <div>
+      <h1>Camera Snapshots</h1>
+      <div class="sub" id="sub">Loading…</div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><b id="k-total">–</b><span>cameras</span></div>
+      <div class="kpi ok"><b id="k-ok">–</b><span>online</span></div>
+      <div class="kpi bad"><b id="k-off">–</b><span>offline</span></div>
+      <div class="kpi"><b id="k-today">–</b><span>snapshots today</span></div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div class="toolbar">
+    <button class="chip on" data-f="all">All</button>
+    <button class="chip" data-f="ok">Online</button>
+    <button class="chip" data-f="offline">Offline</button>
+    <button class="chip" data-f="paused">Paused</button>
+    <input type="search" id="q" placeholder="Search camera…">
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+
+  <h2>Recent events</h2>
+  <div id="events"></div>
+  </section>
+  <section class="tab" id="tab-pump">
+  <section class="pump" id="pump">
+    <div class="pump-head"><h2>Fluid pumping – total volume by fluid</h2></div>
+    <div class="sub" id="p-sub">Loading pumping data…</div>
+    <div class="banner" id="p-banner"></div>
+    <div class="toolbar" id="p-sites"></div>
+    <div class="toolbar" id="p-locs">
+      <button class="chip on" data-l="all">Inside + outside the tunnel</button>
+      <button class="chip" data-l="in">Inside the tunnel</button>
+      <button class="chip" data-l="out">Outside the tunnel</button>
+    </div>
+    <div class="tiles" id="p-tiles"></div>
+    <div class="chartbox" id="p-chart">
+      <div class="legend" id="p-legend"></div>
+      <div id="p-svg"></div>
+      <div class="ptip" id="p-tip"></div>
+    </div>
+    <details class="ptable"><summary>Show data table (last 48 readings)</summary><div id="p-table"></div></details>
+  </section>
+  </section>
+  <section class="tab" id="tab-setup">
+    <div class="card2">
+      <h3>1. Permissions (one time)</h3>
+      <div>Snapshot service: <span id="svc-state" class="svc">…</span></div>
+      <button class="btn pri" onclick="Android.openAccessibility()">Open Accessibility settings</button>
+      <p class="hint">Turn on <b>CamSnap camera snapshots</b>. It is what lets CamSnap open CAM2 and take snapshots on schedule.</p>
+      <button class="btn" onclick="Android.openBattery()">App battery settings</button>
+      <p class="hint">Battery → <b>Unrestricted</b>, so Android never stops CamSnap.</p>
+      <button class="btn" onclick="Android.openSecurity()">Screen lock</button>
+      <button class="btn" onclick="Android.openDeveloper()">Developer options</button>
+      <p class="hint">Snapshots are taken from the screen, so use a dedicated phone: <b>Screen lock = None</b>, keep it on the charger, and turn on <b>Stay awake</b> in Developer options (tap Build number 7 times in About phone to show them).</p>
+    </div>
+    <div class="card2">
+      <h3>2. CAM2 app</h3>
+      <select id="s-pkg"></select>
+      <p class="hint">Pick Provision CAM2. CamSnap opens it before every snapshot.</p>
+    </div>
+    <div class="card2">
+      <h3>3. Cameras</h3>
+      <p class="hint">In CAM2, open the live view with the cameras you want (for example a 4-split) and leave it like that. Then press <b>Mark cameras</b>: CamSnap opens CAM2, takes a screenshot, and you draw a box over each camera picture.</p>
+      <button class="btn pri" onclick="startCalib()">Mark cameras</button>
+      <button class="btn" onclick="snapNow()">Snapshot all now</button>
+      <div id="s-cams"></div>
+    </div>
+    <div class="card2">
+      <h3>4. Pumping sheet</h3>
+      <label>Google Sheet link (shared as "Anyone with the link can view")<input id="s-url" type="url" placeholder="https://docs.google.com/spreadsheets/d/..."></label>
+      <label>Download every (minutes)<input id="s-sheetmin" type="number" min="1"></label>
+    </div>
+    <div class="card2">
+      <h3>5. Timing</h3>
+      <label>Wait for CAM2 video after opening it (seconds)<input id="s-settle" type="number" min="3"></label>
+      <label>Retry offline cameras every (minutes)<input id="s-retry" type="number" min="1"></label>
+      <label>Delete snapshots older than (days, 0 = keep forever)<input id="s-keep" type="number" min="0"></label>
+      <label class="chk"><input id="s-gallery" type="checkbox"> Also save snapshots to the Gallery (Pictures/CamSnap)</label>
+    </div>
+    <button class="btn pri wide" onclick="saveSetup()">Save settings</button>
+    <div id="s-msg"></div>
+  </section>
+</div>
+
+<div class="calib" id="calib">
+  <div class="cbar">
+    <span id="c-hint">Drag a box over each camera picture (inside the picture, below the name bar). Tip: drag over the whole video area and type 2x2 to split it.</span>
+    <button class="btn" onclick="calibUndo()">Undo</button>
+    <button class="btn pri" onclick="calibSave()">Save</button>
+    <button class="btn" onclick="calibClose()">Cancel</button>
+  </div>
+  <div class="cwrap"><div class="cin"><img id="c-img" alt=""><svg id="c-svg" preserveAspectRatio="none"></svg></div></div>
+</div>
+
+
+<div class="viewer" id="viewer">
+  <div class="vtop">
+    <div class="vname" id="vname" dir="auto"></div>
+    <span id="vtime"></span>
+    <a class="vbtn" id="vopen" target="_blank">Open full size</a>
+    <button class="vbtn" id="vclose">Close ✕</button>
+  </div>
+  <div class="vmain">
+    <button class="vbtn nav prev" id="vprev" title="Older">‹</button>
+    <img id="vimg" alt="">
+    <button class="vbtn nav next" id="vnext" title="Newer">›</button>
+  </div>
+  <div class="strip" id="vstrip"></div>
+</div>
+
+<script>
+(function(){
+  var S = null, filter = 'all', query = '', viewer = {id:null, idx:0};
+  var $ = function(id){ return document.getElementById(id); };
+
+  function el(tag, cls, text){ var e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+  function d(s){ return s ? new Date(s) : null; }
+  function fmt(s){
+    var t=d(s); if(!t) return '–';
+    var today=new Date(); var same=t.toDateString()===today.toDateString();
+    var hm=t.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    return same ? 'Today ' + hm : t.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) + ' ' + hm;
+  }
+  function span(ms){
+    var m=Math.round(Math.abs(ms)/60000);
+    if(m<1) return 'less than a minute';
+    if(m<60) return m+' min';
+    var h=Math.floor(m/60), r=m%60;
+    if(h<48) return h+' h'+(r?' '+r+' min':'');
+    return Math.floor(h/24)+' days';
+  }
+  function rel(s){
+    var t=d(s); if(!t) return '';
+    var ms=t-new Date();
+    return ms>=0 ? 'in '+span(ms) : span(ms)+' ago';
+  }
+  function every(h){ return h<1 ? 'Every '+Math.round(h*60)+' min' : 'Every '+(+h.toFixed(2))+' h'; }
+  var LABEL={ok:'Online',offline:'Offline',pending:'Waiting',paused:'Paused'};
+
+  function load(){ try{ S=JSON.parse(Android.status()); }catch(e){ S=null; } render(); }
+  window.reloadAll=function(){ load(); if(window.reloadPump) reloadPump(); };
+
+  function render(){
+    var banner=$('banner');
+    if(!S){
+      $('sub').textContent='No data yet';
+      banner.textContent='Could not read CamSnap data.';
+      banner.classList.add('show');
+      $('grid').innerHTML=''; $('grid').appendChild(el('div','empty','No cameras to show yet.'));
+      return;
+    }
+    if(!S.service_on){
+      banner.textContent='The snapshot service is OFF - open Setup and turn on CamSnap in Accessibility settings.';
+      banner.classList.add('show');
+    } else banner.classList.remove('show');
+    $('sub').textContent='Updated '+fmt(S.generated_at)+' · failed cameras retry every '+S.retry_minutes+' min';
+
+    var cams=S.cameras||[], todayStr=new Date().toDateString(), today=0;
+    cams.forEach(function(c){ (c.history||[]).forEach(function(h){ if(d(h.t).toDateString()===todayStr) today++; }); });
+    $('k-total').textContent=cams.length;
+    $('k-ok').textContent=cams.filter(function(c){return c.status==='ok';}).length;
+    $('k-off').textContent=cams.filter(function(c){return c.status==='offline';}).length;
+    $('k-today').textContent=today;
+
+    var grid=$('grid'); grid.innerHTML='';
+    var shown=cams.filter(function(c){
+      return (filter==='all'||c.status===filter) && (!query || c.name.toLowerCase().indexOf(query)>=0);
+    });
+    if(!cams.length) grid.appendChild(el('div','empty','No cameras set up yet - run calibrate.bat, mark the camera tiles and press Save.'));
+    else if(!shown.length) grid.appendChild(el('div','empty','No cameras match.'));
+    shown.forEach(function(c){ grid.appendChild(card(c)); });
+
+    renderEvents();
+    if(viewer.id) openViewer(viewer.id, viewer.idx, true);
+  }
+
+  function card(c){
+    var cd=el('div','card'+(c.status==='offline'?' offline':''));
+    cd.onclick=function(){ openViewer(c.id,0); };
+    var m=el('div','media');
+    if(c.latest_src){
+      var img=el('img'); img.loading='lazy'; img.alt=c.name; img.src=c.latest_src; m.appendChild(img);
+      m.appendChild(el('div','stamp',fmt(c.last_success||(c.history[0]&&c.history[0].t))));
+      m.appendChild(el('div','count',c.count+' saved'));
+    } else if(c.rejected_src){
+      var ri=el('img'); ri.alt='rejected capture'; ri.src=c.rejected_src; ri.style.opacity='.75'; m.appendChild(ri);
+      m.appendChild(el('div','stamp','Last try '+fmt(c.last_attempt)+' - rejected (what CamSnap saw)'));
+    } else m.appendChild(el('div',null,'No snapshot yet'));
+    cd.appendChild(m);
+
+    var b=el('div','body');
+    var t=el('div','title'); var n=el('div','name',c.name); n.dir='auto'; n.title=c.name;
+    t.appendChild(n); t.appendChild(el('span','pill '+c.status,LABEL[c.status]||c.status)); b.appendChild(t);
+
+    var dl=el('dl','rows');
+    function row(k,v){ dl.appendChild(el('dt',null,k)); dl.appendChild(el('dd',null,v)); }
+    row('Schedule', every(c.interval_hours)+(c.host?' · '+c.host:''));
+    row('Last snapshot', c.last_success ? fmt(c.last_success)+' ('+rel(c.last_success)+')' : 'never');
+    if(c.status==='offline'){
+      row('Offline since', fmt(c.offline_since)+' ('+span(new Date()-d(c.offline_since))+')');
+      row('Next try', c.next_due ? fmt(c.next_due)+' ('+rel(c.next_due)+')' : '–');
+    } else if(c.status!=='paused'){
+      row('Next snapshot', c.next_due ? fmt(c.next_due)+' ('+rel(c.next_due)+')' : 'now');
+    }
+    b.appendChild(dl);
+    if(c.status==='offline' && c.last_error) b.appendChild(el('div','err',c.fail_count+' failed attempt(s) · '+c.last_error));
+    cd.appendChild(b);
+    return cd;
+  }
+
+  function renderEvents(){
+    var box=$('events'); box.innerHTML='';
+    var ev=(S.events||[]).slice(0,40);
+    if(!ev.length){ box.appendChild(el('div','empty','No events yet.')); return; }
+    var tb=el('table'), th=el('tr');
+    ['Time','Camera','Event'].forEach(function(h){ th.appendChild(el('th',null,h)); });
+    tb.appendChild(th);
+    ev.forEach(function(e){
+      var tr=el('tr');
+      tr.appendChild(el('td',null,fmt(e.t)+(e.last?' → '+fmt(e.last):'')));
+      var n=el('td',null,e.camera); n.dir='auto'; tr.appendChild(n);
+      tr.appendChild(el('td','k-'+e.kind,e.text));
+      tb.appendChild(tr);
+    });
+    box.appendChild(tb);
+  }
+
+  function camById(id){ return (S&&S.cameras||[]).filter(function(c){return c.id===id;})[0]; }
+
+  function openViewer(id, idx, refresh){
+    var c=camById(id); if(!c||!c.history||!c.history.length){ if(!refresh) closeViewer(); return; }
+    idx=Math.max(0,Math.min(idx,c.history.length-1));
+    viewer.id=id; viewer.idx=idx;
+    var h=c.history[idx];
+    $('vname').textContent=c.name;
+    $('vtime').textContent=fmt(h.t)+'  ·  '+(idx+1)+' / '+c.history.length;
+    $('vimg').src=h.src; $('vopen').href=h.src;
+    $('vprev').style.visibility = idx<c.history.length-1 ? 'visible':'hidden';
+    $('vnext').style.visibility = idx>0 ? 'visible':'hidden';
+    var strip=$('vstrip');
+    if(!refresh || strip.dataset.id!==id || strip.childElementCount!==c.history.length){
+      strip.innerHTML=''; strip.dataset.id=id;
+      c.history.forEach(function(x,i){
+        var bt=el('button'); var im=el('img'); im.loading='lazy'; im.src=x.src; bt.appendChild(im);
+        bt.appendChild(el('span',null,fmt(x.t)));
+        bt.onclick=function(){ openViewer(id,i); };
+        strip.appendChild(bt);
+      });
+    }
+    Array.prototype.forEach.call(strip.children,function(bt,i){ bt.classList.toggle('on',i===idx); });
+    if(strip.children[idx] && !refresh) strip.children[idx].scrollIntoView({block:'nearest',inline:'center'});
+    $('viewer').classList.add('show');
+  }
+  function closeViewer(){ viewer.id=null; $('viewer').classList.remove('show'); }
+  window.closeViewer=closeViewer;
+
+  $('vclose').onclick=closeViewer;
+  $('vprev').onclick=function(){ openViewer(viewer.id, viewer.idx+1); };
+  $('vnext').onclick=function(){ openViewer(viewer.id, viewer.idx-1); };
+  $('viewer').addEventListener('click',function(e){ if(e.target===this||e.target.classList.contains('vmain')) closeViewer(); });
+  document.addEventListener('keydown',function(e){
+    if(!viewer.id) return;
+    if(e.key==='Escape') closeViewer();
+    if(e.key==='ArrowLeft') openViewer(viewer.id, viewer.idx+1);
+    if(e.key==='ArrowRight') openViewer(viewer.id, viewer.idx-1);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.chip[data-f]'),function(ch){
+    ch.onclick=function(){
+      filter=ch.dataset.f;
+      Array.prototype.forEach.call(document.querySelectorAll('.chip[data-f]'),function(x){x.classList.toggle('on',x===ch);});
+      render();
+    };
+  });
+  $('q').oninput=function(){ query=this.value.trim().toLowerCase(); render(); };
+
+  load();
+  setInterval(load, 30000);
+})();
+</script>
+<script>
+(function(){
+  var P=null, site=null, loc='all';
+  var $=function(id){return document.getElementById(id);};
+  var NS='http://www.w3.org/2000/svg';
+  var KNOWN=['מים','בנטונייט','בנטובטון','אקווה בטון'];
+  var EN={'מים':'Water','בנטונייט':'Bentonite','בנטובטון':'Bento-concrete','אקווה בטון':'Aqua-concrete'};
+  var LIGHT=['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+  var DARK =['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
+  var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
+  function sv(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  function fmtN(v){return Math.round(v).toLocaleString('en-US');}
+  function fmtT(d){return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}
+  function label(m){return EN[m]? EN[m]+' · '+m : m;}
+  function lab(m){var s=el('span',null,label(m)); s.dir=EN[m]?'ltr':'auto'; return s;}
+
+  // fixed colour per fluid (never by rank): known fluids first, others in order of first appearance
+  var order=KNOWN.slice();
+  function colorOf(m){ var i=order.indexOf(m); if(i<0){order.push(m);i=order.length-1;} return (dark?DARK:LIGHT)[Math.min(i,7)]; }
+
+  function load(){ try{ P=JSON.parse(Android.pumping()); }catch(e){ P=null; } render(); }
+  window.reloadPump=load;
+
+  function series(st){
+    // cumulative volume per fluid at every reading time, for the chosen location filter
+    var mats=[], cum={}, pts=[];
+    st.rows.forEach(function(r){ if(mats.indexOf(r.m)<0) mats.push(r.m); });
+    mats.sort(function(a,b){return order.indexOf(a)-order.indexOf(b);});
+    mats.forEach(function(m){cum[m]=0; colorOf(m);});
+    st.rows.forEach(function(r){
+      if(loc==='all'||r.loc===loc) cum[r.m]+=r.d;
+      var p={t:new Date(r.t), row:r, v:{}}; mats.forEach(function(m){p.v[m]=cum[m];}); pts.push(p);
+    });
+    return {mats:mats, pts:pts, tot:cum};
+  }
+
+  function render(){
+    var sub=$('p-sub'), ban=$('p-banner');
+    if(!P){ sub.textContent='No pumping data yet - add the Google Sheet link in Setup; it is downloaded within a minute.';
+            ban.classList.remove('show'); $('p-svg').innerHTML=''; return; }
+    sub.textContent='From Google Sheet · last downloaded '+(P.fetched_at?fmtT(new Date(P.fetched_at)):'never')+
+      ' · refreshes every '+(P.refresh_minutes||10)+' min';
+    if(P.error){ ban.textContent='Last download failed ('+fmtT(new Date(P.last_attempt))+'): '+P.error+'. Showing the last good data.'; ban.classList.add('show'); }
+    else ban.classList.remove('show');
+    var sites=P.sites||[];
+    if(!sites.length){ $('p-svg').innerHTML=''; $('p-svg').appendChild(el('div','pempty','No site data found in the sheet.')); return; }
+    if(!site||!sites.some(function(s){return s.name===site;})) site=sites[0].name;
+    var box=$('p-sites'); box.innerHTML='';
+    sites.forEach(function(s){ var b=el('button','chip'+(s.name===site?' on':''),s.name); b.dir='auto';
+      b.onclick=function(){site=s.name;render();}; box.appendChild(b); });
+    var st=sites.filter(function(s){return s.name===site;})[0];
+    var S=series(st);
+    tiles(st,S); legend(S); chart(S); table(st);
+  }
+
+  function tiles(st,S){
+    var box=$('p-tiles'); box.innerHTML='';
+    var all=0;
+    S.mats.forEach(function(m){ all+=S.tot[m];
+      var t=el('div','tile'), l=el('div','lab'), sw=el('span','sw'); sw.style.background=colorOf(m);
+      l.appendChild(sw); l.appendChild(lab(m)); t.appendChild(l);
+      var v=el('div','val',fmtN(S.tot[m])); v.appendChild(el('small',null,'m³')); t.appendChild(v); box.appendChild(t); });
+    var t=el('div','tile'); t.appendChild(el('div','lab','Total, all fluids'));
+    var v=el('div','val',fmtN(all)); v.appendChild(el('small',null,'m³')); t.appendChild(v); box.appendChild(t);
+    var last=st.rows[st.rows.length-1];
+    if(last){ var t2=el('div','tile'); t2.appendChild(el('div','lab','Latest flow · '+fmtT(new Date(last.t))));
+      var v2=el('div','val',last.f==null?'–':fmtN(last.f)); v2.appendChild(el('small',null,'m³/h')); t2.appendChild(v2); box.appendChild(t2); }
+  }
+
+  function legend(S){
+    var lg=$('p-legend'); lg.innerHTML='';
+    S.mats.forEach(function(m){ var s=el('span'), sw=el('span','sw'); sw.style.background=colorOf(m);
+      s.appendChild(sw); s.appendChild(lab(m)); lg.appendChild(s); });
+  }
+
+  function niceMax(v){ if(v<=0) return 10; var p=Math.pow(10,Math.floor(Math.log10(v))), n=v/p;
+    return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p; }
+
+  function chart(S){
+    var host=$('p-svg'); host.innerHTML='';
+    if(S.pts.length<2){ host.appendChild(el('div','pempty','Not enough readings yet for this site.')); return; }
+    var W=Math.max(320,host.clientWidth), H=W<600?260:340, narrow=W<600;
+    var m={l:58,r:narrow?12:110,t:24,b:30}, iw=W-m.l-m.r, ih=H-m.t-m.b;
+    var t0=+S.pts[0].t, t1=+S.pts[S.pts.length-1].t; if(t1===t0) t1=t0+3600e3;
+    var ymax=0; S.mats.forEach(function(k){ ymax=Math.max(ymax,S.tot[k]); }); ymax=niceMax(ymax*1.05);
+    var X=function(t){return m.l+(t-t0)/(t1-t0)*iw;}, Y=function(v){return m.t+ih-v/ymax*ih;};
+    var svg=sv('svg',{viewBox:'0 0 '+W+' '+H,width:'100%',height:H,role:'img','aria-label':'Total volume by fluid over time'});
+    // grid + y axis
+    var g=sv('g',{'class':'grid'}), ax=sv('g',{'class':'ax'});
+    for(var i=0;i<=4;i++){ var v=ymax*i/4, y=Y(v);
+      g.appendChild(sv('line',{x1:m.l,x2:m.l+iw,y1:y,y2:y,'stroke-width':1}));
+      var tx=sv('text',{x:m.l-8,y:y+4,'text-anchor':'end'}); tx.textContent=fmtN(v); ax.appendChild(tx); }
+    var yl=sv('text',{x:m.l-8,y:m.t-12,'text-anchor':'end'}); yl.textContent='m³'; ax.appendChild(yl);
+    // x axis: day ticks (or 6-hour ticks for short spans)
+    var span=(t1-t0)/3600e3, stepH=span<=48?6:24*Math.max(1,Math.ceil(span/24/(narrow?4:9)));
+    var d=new Date(t0); d.setMinutes(0,0,0); if(stepH>=24) d.setHours(0); else d.setHours(Math.ceil(d.getHours()/stepH)*stepH);
+    while(+d<t0) d=new Date(+d+stepH*3600e3);
+    for(;+d<=t1;d=new Date(+d+stepH*3600e3)){ var x=X(+d);
+      ax.appendChild(sv('line',{x1:x,x2:x,y1:m.t+ih,y2:m.t+ih+4,stroke:'currentColor','stroke-opacity':.3}));
+      var lt=sv('text',{x:x,y:m.t+ih+18,'text-anchor':'middle'});
+      lt.textContent= stepH>=24 ? d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) : d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      ax.appendChild(lt); }
+    ax.appendChild(sv('line',{x1:m.l,x2:m.l+iw,y1:m.t+ih,y2:m.t+ih,stroke:'currentColor','stroke-opacity':.35}));
+    svg.appendChild(g); svg.appendChild(ax);
+    // lines
+    var ends=[];
+    S.mats.forEach(function(k){
+      var dd=S.pts.map(function(p,i){return (i?'L':'M')+X(+p.t).toFixed(1)+','+Y(p.v[k]).toFixed(1);}).join('');
+      svg.appendChild(sv('path',{d:dd,fill:'none',stroke:colorOf(k),'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+      ends.push({k:k,y:Y(S.tot[k])});
+    });
+    // direct labels at line ends (nudged apart)
+    if(!narrow){ ends.sort(function(a,b){return a.y-b.y;});
+      for(var j=1;j<ends.length;j++) if(ends[j].y-ends[j-1].y<15) ends[j].y=ends[j-1].y+15;
+      ends.forEach(function(e){ var tx=sv('text',{x:m.l+iw+8,y:e.y+4,'font-size':12,fill:'currentColor'});
+        tx.textContent=(EN[e.k]||e.k)+' '+fmtN(S.tot[e.k]); svg.appendChild(tx); }); }
+    // hover layer
+    var cross=sv('line',{y1:m.t,y2:m.t+ih,stroke:'currentColor','stroke-opacity':.35,'stroke-dasharray':'3 3',visibility:'hidden'});
+    svg.appendChild(cross);
+    var dots=S.mats.map(function(k){ var c=sv('circle',{r:4.5,fill:colorOf(k),stroke:'var(--panel)','stroke-width':2,visibility:'hidden'}); svg.appendChild(c); return c; });
+    var hit=sv('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'}); svg.appendChild(hit);
+    var tip=$('p-tip');
+    function move(ev){
+      var r=svg.getBoundingClientRect(), sx=(ev.clientX-r.left)*W/r.width;
+      var t=t0+(sx-m.l)/iw*(t1-t0), best=0, bd=1e18;
+      S.pts.forEach(function(p,i){var dd=Math.abs(+p.t-t); if(dd<bd){bd=dd;best=i;}});
+      var p=S.pts[best], x=X(+p.t);
+      cross.setAttribute('x1',x); cross.setAttribute('x2',x); cross.setAttribute('visibility','visible');
+      S.mats.forEach(function(k,i){dots[i].setAttribute('cx',x);dots[i].setAttribute('cy',Y(p.v[k]));dots[i].setAttribute('visibility','visible');});
+      tip.innerHTML=''; tip.appendChild(el('b',null,fmtT(p.t)));
+      S.mats.forEach(function(k){ var row=el('div','r'), a=el('span'), sw=el('span','sw'); sw.style.background=colorOf(k);
+        a.appendChild(sw); a.appendChild(lab(k)); row.appendChild(a);
+        row.appendChild(el('span',null,fmtN(p.v[k])+' m³')); tip.appendChild(row); });
+      var info=el('div','r'); info.appendChild(el('span',null,'Now pumping')); var nv=el('span'); nv.appendChild(lab(p.row.m)); if(p.row.f!=null) nv.appendChild(el('span',null,' · '+fmtN(p.row.f)+' m³/h')); info.appendChild(nv); tip.appendChild(info);
+      tip.style.display='block';
+      var box=$('p-chart').getBoundingClientRect(), px=ev.clientX-box.left+14, py=ev.clientY-box.top+14;
+      if(px+tip.offsetWidth>box.width-6) px=ev.clientX-box.left-tip.offsetWidth-14;
+      if(py+tip.offsetHeight>box.height-6) py=box.height-tip.offsetHeight-6;
+      tip.style.left=Math.max(6,px)+'px'; tip.style.top=Math.max(6,py)+'px';
+    }
+    function leave(){ tip.style.display='none'; cross.setAttribute('visibility','hidden'); dots.forEach(function(c){c.setAttribute('visibility','hidden');}); }
+    hit.addEventListener('mousemove',move); hit.addEventListener('mouseleave',leave);
+    hit.addEventListener('touchstart',function(e){move(e.touches[0]);},{passive:true});
+    host.appendChild(svg);
+  }
+
+  function table(st){
+    var box=$('p-table'); box.innerHTML='';
+    var rows=st.rows.slice(-48).reverse(), tb=el('table'), h=el('tr');
+    ['Time','Fluid','Location','Meter (m³)','Pumped since previous (m³)','Flow (m³/h)'].forEach(function(x){h.appendChild(el('th',null,x));});
+    tb.appendChild(h);
+    rows.forEach(function(r){ var tr=el('tr');
+      tr.appendChild(el('td',null,fmtT(new Date(r.t))));
+      var f=el('td'); f.appendChild(lab(r.m)); tr.appendChild(f);
+      tr.appendChild(el('td',null,r.loc==='out'?'Outside tunnel':'Inside tunnel'));
+      tr.appendChild(el('td',null,fmtN(r.r))); tr.appendChild(el('td',null,fmtN(r.d)));
+      tr.appendChild(el('td',null,r.f==null?'–':fmtN(r.f))); tb.appendChild(tr); });
+    box.appendChild(tb);
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('#p-locs .chip'),function(ch){
+    ch.onclick=function(){ loc=ch.dataset.l;
+      Array.prototype.forEach.call(document.querySelectorAll('#p-locs .chip'),function(x){x.classList.toggle('on',x===ch);});
+      render(); };
+  });
+  var rt; window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(render,150);});
+  load(); setInterval(load, 60000);
+})();
+</script>
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  var NS='http://www.w3.org/2000/svg';
+  var SET=null, calib=null;
+
+  // ---------------- tabs
+  window.showTab=function(name){
+    ['cams','pump','setup'].forEach(function(t){
+      $('tab-'+t).classList.toggle('on',t===name);
+      $('tb-'+t).classList.toggle('on',t===name);
+    });
+    if(name==='setup') loadSetup();
+    window.dispatchEvent(new Event('resize'));
+  };
+
+  // ---------------- setup
+  function loadSetup(){
+    SET=JSON.parse(Android.settings());
+    var on=Android.serviceOn(), st=$('svc-state');
+    st.textContent=on?'ON':'OFF - turn it on below'; st.className='svc '+(on?'on':'off');
+    var sel=$('s-pkg'); sel.innerHTML='';
+    var o0=document.createElement('option'); o0.value=''; o0.textContent='— choose the CAM2 app —'; sel.appendChild(o0);
+    JSON.parse(Android.apps()).forEach(function(a){
+      var o=document.createElement('option'); o.value=a.pkg; o.textContent=a.label+'  ('+a.pkg+')';
+      if(a.pkg===SET.cam2_pkg) o.selected=true; sel.appendChild(o);
+    });
+    if(!SET.cam2_pkg){ // pre-select anything that looks like CAM2
+      for(var i=0;i<sel.options.length;i++){ if(/cam\s*2|provision/i.test(sel.options[i].textContent)){ sel.selectedIndex=i; break; } }
+    }
+    $('s-url').value=SET.sheet_url||''; $('s-sheetmin').value=SET.sheet_refresh_minutes;
+    $('s-settle').value=SET.settle_seconds; $('s-retry').value=SET.retry_minutes; $('s-keep').value=SET.keep_days;
+    $('s-gallery').checked=!!SET.copy_to_gallery;
+    drawCamList();
+  }
+  function drawCamList(){
+    var box=$('s-cams'); box.innerHTML='';
+    (SET.cameras||[]).forEach(function(c,i){
+      var r=document.createElement('div'); r.className='camrow';
+      var n=document.createElement('div'); n.className='n'; n.textContent=c.name; n.dir='auto'; r.appendChild(n);
+      var iv=document.createElement('input'); iv.type='number'; iv.min='0.05'; iv.step='0.25'; iv.value=c.interval_hours; iv.title='hours';
+      iv.onchange=function(){ c.interval_hours=parseFloat(iv.value)||2; }; r.appendChild(iv);
+      var en=document.createElement('label'); en.className='chk'; var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=c.enabled!==false;
+      cb.onchange=function(){ c.enabled=cb.checked; }; en.appendChild(cb); en.appendChild(document.createTextNode(' on')); r.appendChild(en);
+      var del=document.createElement('button'); del.className='btn del'; del.textContent='✕';
+      del.onclick=function(){ if(confirm('Remove '+c.name+'? Its saved snapshots are kept.')){ SET.cameras.splice(i,1); drawCamList(); } };
+      r.appendChild(del); box.appendChild(r);
+    });
+    if(!(SET.cameras||[]).length){ var p=document.createElement('p'); p.className='hint'; p.textContent='No cameras marked yet.'; box.appendChild(p); }
+    else { var p2=document.createElement('p'); p2.className='hint'; p2.textContent='Hours between snapshots · on/off · remove. Press Save settings after changes.'; box.appendChild(p2); }
+  }
+  window.saveSetup=function(){
+    var patch={cam2_pkg:$('s-pkg').value, sheet_url:$('s-url').value.trim(),
+      sheet_refresh_minutes:Math.max(1,parseInt($('s-sheetmin').value)||10),
+      settle_seconds:Math.max(3,parseInt($('s-settle').value)||10),
+      retry_minutes:Math.max(1,parseInt($('s-retry').value)||5),
+      keep_days:Math.max(0,parseInt($('s-keep').value)||0),
+      copy_to_gallery:$('s-gallery').checked, cameras:SET.cameras||[]};
+    var r=Android.saveSettings(JSON.stringify(patch));
+    $('s-msg').textContent= r==='ok' ? 'Saved.' : r;
+    setTimeout(function(){$('s-msg').textContent='';},3000);
+    loadSetup();
+  };
+  window.snapNow=function(){ var r=Android.snapNow(); if(r!=='ok') alert(r); else alert('CamSnap will open CAM2 and take the snapshots now.'); };
+
+  // ---------------- marking cameras
+  window.startCalib=function(){
+    // save the chosen app first
+    if($('s-pkg').value && $('s-pkg').value!==SET.cam2_pkg) Android.saveSettings(JSON.stringify({cam2_pkg:$('s-pkg').value}));
+    var r=Android.startCalibration(); if(r!=='ok') alert(r);
+  };
+  function openCalib(info){
+    calib={w:info.w,h:info.h,boxes:[]};
+    var img=$('c-img'); img.onload=drawCalib; img.src=info.src;
+    $('calib').classList.add('show');
+  }
+  function scale(){ var img=$('c-img'); return img.clientWidth? calib.w/img.clientWidth : 1; }
+  function rect(svg,x,y,w,h,color,label){
+    var k=scale(), r=document.createElementNS(NS,'rect');
+    r.setAttribute('x',x/k); r.setAttribute('y',y/k); r.setAttribute('width',w/k); r.setAttribute('height',h/k);
+    r.setAttribute('fill','none'); r.setAttribute('stroke',color); r.setAttribute('stroke-width',3); svg.appendChild(r);
+    if(label){ var t=document.createElementNS(NS,'text'); t.setAttribute('x',x/k+6); t.setAttribute('y',y/k+18);
+      t.setAttribute('fill','#fff'); t.setAttribute('font-size','14'); t.setAttribute('font-weight','700');
+      t.setAttribute('stroke','#000'); t.setAttribute('stroke-width','3'); t.setAttribute('paint-order','stroke'); t.textContent=label; svg.appendChild(t); }
+    return r;
+  }
+  function drawCalib(){
+    var svg=$('c-svg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
+    var img=$('c-img'); svg.setAttribute('viewBox','0 0 '+img.clientWidth+' '+img.clientHeight);
+    (SET.cameras||[]).forEach(function(c){
+      if(c.screen && c.screen[0]===calib.w && c.screen[1]===calib.h) rect(svg,c.region[0],c.region[1],c.region[2],c.region[3],'#3987e5',c.name);
+    });
+    calib.boxes.forEach(function(b){ rect(svg,b.region[0],b.region[1],b.region[2],b.region[3],'#1baf7a',b.name); });
+  }
+  (function(){
+    var svg=$('c-svg'), start=null, live=null;
+    function pt(e){ var r=svg.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+    svg.addEventListener('pointerdown',function(e){ start=pt(e); svg.setPointerCapture(e.pointerId);
+      live=document.createElementNS(NS,'rect'); live.setAttribute('fill','rgba(255,212,0,.15)'); live.setAttribute('stroke','#ffd400');
+      live.setAttribute('stroke-width',2); svg.appendChild(live); });
+    svg.addEventListener('pointermove',function(e){ if(!start) return; var p=pt(e);
+      live.setAttribute('x',Math.min(p.x,start.x)); live.setAttribute('y',Math.min(p.y,start.y));
+      live.setAttribute('width',Math.abs(p.x-start.x)); live.setAttribute('height',Math.abs(p.y-start.y)); });
+    svg.addEventListener('pointerup',function(e){ if(!start) return; var p=pt(e), s=start; start=null; if(live) live.remove();
+      var k=scale(), x=Math.round(Math.min(p.x,s.x)*k), y=Math.round(Math.min(p.y,s.y)*k),
+          w=Math.round(Math.abs(p.x-s.x)*k), h=Math.round(Math.abs(p.y-s.y)*k);
+      if(w<40||h<30) return;
+      setTimeout(function(){ askBox(x,y,w,h); },50); });
+  })();
+  function askBox(x,y,w,h){
+    var ans=prompt('Camera name for this box\n(or a grid like 2x2 to split it):','');
+    if(!ans||!ans.trim()) return;
+    var m=ans.trim().match(/^(\d+)\s*[xX*×]\s*(\d+)$/), boxes=[];
+    if(m){
+      var rows=+m[1], cols=+m[2], tw=w/cols, th=h/rows, pad=4;
+      for(var r=0;r<rows;r++) for(var c=0;c<cols;c++){
+        var reg=[Math.round(x+c*tw+pad),Math.round(y+r*th+pad),Math.round(tw-2*pad),Math.round(th-2*pad)];
+        var tmp=rect($('c-svg'),reg[0],reg[1],reg[2],reg[3],'#ffd400');
+        var nm=prompt('Name for row '+(r+1)+', column '+(c+1)+' (the yellow box)\nleave empty to skip:','');
+        tmp.remove(); if(nm&&nm.trim()) boxes.push({name:nm.trim(),region:reg});
+      }
+    } else boxes.push({name:ans.trim(),region:[x,y,w,h]});
+    if(!boxes.length) return;
+    var hrs=parseFloat(prompt('Take a snapshot every how many hours?\n(0.5 = every 30 minutes)','2'));
+    if(!(hrs>0)) return;
+    boxes.forEach(function(b){ calib.boxes.push({name:b.name,enabled:true,interval_hours:hrs,region:b.region,screen:[calib.w,calib.h]}); });
+    drawCalib();
+  }
+  window.calibUndo=function(){ if(calib&&calib.boxes.length){ calib.boxes.pop(); drawCalib(); } };
+  window.calibClose=function(){ $('calib').classList.remove('show'); calib=null; };
+  window.calibSave=function(){
+    if(!calib||!calib.boxes.length){ calibClose(); return; }
+    var names={}; calib.boxes.forEach(function(b){names[b.name]=1;});
+    var cams=(SET.cameras||[]).filter(function(c){return !names[c.name];}).concat(calib.boxes);
+    var r=Android.saveSettings(JSON.stringify({cameras:cams}));
+    if(r!=='ok') alert(r); else alert(calib.boxes.length+' camera(s) saved. The first snapshots are taken within a minute.');
+    calibClose(); loadSetup();
+  };
+
+  // ---------------- app life
+  window.onAppResume=function(){
+    try{
+      var info=JSON.parse(Android.calibInfo());
+      if(info.pending){
+        if(info.error) alert('Could not take the screenshot: '+info.error);
+        else { if(!SET) SET=JSON.parse(Android.settings()); showTab('setup'); openCalib(info); }
+      }
+    }catch(e){}
+    if(window.reloadAll) reloadAll();
+    if($('tab-setup').classList.contains('on')) loadSetup();
+  };
+  window.onBack=function(){
+    if($('calib').classList.contains('show')){ calibClose(); return true; }
+    var v=$('viewer'); if(v && v.classList.contains('show')){ closeViewer(); return true; }
+    if(!$('tab-cams').classList.contains('on')){ showTab('cams'); return true; }
+    return false;
+  };
+  window.addEventListener('resize',function(){ if(calib) drawCalib(); });
+
+  var s0=JSON.parse(Android.settings());
+  showTab((!Android.serviceOn() || !(s0.cameras||[]).length) ? 'setup' : 'cams');
+})();
+</script>
+</body>
+</html>
